@@ -1,7 +1,7 @@
 {
-  "name": "@kettu/gitdb",
+  "name": "@kettu-studio/gitdb",
   "version": "0.1.0",
-  "description": "Database abstraction helpers for GitVault modules",
+  "description": "GitDB is a lightweight, fast, and simple Git-based database for Node.js. It allows you to store and retrieve data in a Git repository, making it easy to version control your data.",
   "license": "MIT",
   "author": "kettu",
   "type": "module",
@@ -21,8 +21,7 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/kettu/gitvault-suite.git",
-    "directory": "packages/gitdb"
+    "url": "https://github.com/kettu/gitdb.git"
   },
   "publishConfig": {
     "access": "public"
