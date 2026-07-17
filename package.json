@@ -1,6 +1,6 @@
 {
   "name": "@getgitops/gitdb",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "GitDB is a lightweight, fast, and simple Git-based database for Node.js. It allows you to store and retrieve data in a Git repository, making it easy to version control your data.",
   "license": "MIT",
   "author": "kettu",
