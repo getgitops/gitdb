@@ -1,5 +1,5 @@
 {
-  "name": "@kettu-studio/gitdb",
+  "name": "@getgitops/gitdb",
   "version": "0.2.0",
   "description": "GitDB is a lightweight, fast, and simple Git-based database for Node.js. It allows you to store and retrieve data in a Git repository, making it easy to version control your data.",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/kettu/gitdb.git"
+    "url": "https://github.com/getgitops/gitdb.git"
   },
   "publishConfig": {
     "access": "public"

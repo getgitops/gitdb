@@ -1,4 +1,4 @@
-# @kettu/gitdb
+# @getgitops/gitdb
 
 Un ORM ligero y type-safe construido sobre Git como almacenamiento. Perfect para aplicaciones que necesitan versionado, auditoría y sincronización distribuida de datos.
 
@@ -16,7 +16,7 @@ Un ORM ligero y type-safe construido sobre Git como almacenamiento. Perfect para
 ## Instalación
 
 ```bash
-npm install @kettu/gitdb
+npm install @getgitops/gitdb
 ```
 
 **Requisitos:**
@@ -28,7 +28,7 @@ npm install @kettu/gitdb
 ### 1. Definir Schema
 
 ```ts
-import { entity, uuid, text, int, timestamp } from '@kettu/gitdb';
+import { entity, uuid, text, int, timestamp } from '@getgitops/gitdb';
 
 export const User = entity('users', {
   id: uuid().primary(),
@@ -50,7 +50,7 @@ export const Post = entity('posts', {
 ### 2. Inicializar GitDB
 
 ```ts
-import { gitDb } from '@kettu/gitdb';
+import { gitDb } from '@getgitops/gitdb';
 
 const db = await gitDb({
   dir: '/path/to/repo',
@@ -125,7 +125,7 @@ await db
 ### 4. Relaciones
 
 ```ts
-import { defineRelations } from '@kettu/gitdb';
+import { defineRelations } from '@getgitops/gitdb';
 
 defineRelations(User, {
   posts: {

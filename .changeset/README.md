@@ -1,6 +1,6 @@
 # Changesets
 
-Este directorio contiene archivos de cambios semanticos para @kettu/gitdb.
+Este directorio contiene archivos de cambios semanticos para @getgitops/gitdb.
 
 Crear un changeset:
 

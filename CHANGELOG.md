@@ -1,4 +1,4 @@
-# @kettu-studio/gitdb
+# @getgitops/gitdb
 
 ## 0.2.0
 
