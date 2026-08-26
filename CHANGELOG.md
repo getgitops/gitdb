@@ -1,5 +1,11 @@
 # @getgitops/gitdb
 
+## 0.4.0
+
+### Minor Changes
+
+- 6fea791: Add Sync Poll + Add Unique implementation
+
 ## 0.3.0
 
 ### Minor Changes
