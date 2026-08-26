@@ -96,4 +96,32 @@ describe('UpdateQuery', () => {
     const result = await query.set({ status: 'done' }).where({ id: 1 }).returning(['id']);
     expect(result.rows).toEqual([{ id: 1 }]);
   });
+
+  it('rechaza actualizar a un valor unique ya usado por otra fila', async () => {
+    let persistedRows: Row[] = [
+      { id: 1, email: 'ana@kettu.dev' },
+      { id: 2, email: 'beto@kettu.dev' },
+    ];
+    const users = entity('users', {
+      id: integer().primaryKey().autoincrement(),
+      email: text().notNull().unique(),
+    });
+
+    const createQuery = () =>
+      new UpdateQuery(users, {
+        loadEntityRows: async () => [...persistedRows],
+        saveEntityRows: async (_entityName, rows) => {
+          persistedRows = [...rows];
+        },
+        queueCommit: () => undefined,
+      });
+
+    await expect(createQuery().set({ email: 'ana@kettu.dev' }).where({ id: 2 }).execute()).rejects.toThrow(
+      'Duplicate value for unique field users.email: ana@kettu.dev',
+    );
+
+    // Actualizar la misma fila con su propio valor no debe colisionar consigo misma.
+    const result = await createQuery().set({ email: 'ana@kettu.dev' }).where({ id: 1 }).execute();
+    expect(result.rowCount).toBe(1);
+  });
 });

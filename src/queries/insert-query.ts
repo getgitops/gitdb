@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { EntityDefinition } from '../core/schema.ts';
-import { validateEntityRow } from '../core/schema.ts';
+import { buildUniqueIndex, enforceUniqueRow, getUniqueFields, validateEntityRow } from '../core/schema.ts';
 
 export type EntityRow = Record<string, unknown>;
 
@@ -47,6 +47,7 @@ export class InsertQuery implements PromiseLike<InsertExecutionResult> {
 
     const existingRows = await this.dependencies.loadEntityRows(this.entity.name);
     const insertedRows: EntityRow[] = [];
+    const uniqueIndex = buildUniqueIndex(getUniqueFields(this.entity), existingRows);
 
     for (const rawRow of this.rowsToInsert) {
       const prepared = this.prepareInsertRow(rawRow, [...existingRows, ...insertedRows]);
@@ -54,6 +55,8 @@ export class InsertQuery implements PromiseLike<InsertExecutionResult> {
       if (!validation.valid) {
         throw new Error(`Invalid insert row for ${this.entity.name}: ${validation.errors.join(', ')}`);
       }
+
+      enforceUniqueRow(this.entity.name, uniqueIndex, prepared);
 
       insertedRows.push(prepared);
     }

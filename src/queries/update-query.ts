@@ -1,5 +1,5 @@
 import type { EntityDefinition } from '../core/schema.ts';
-import { validateEntityRow } from '../core/schema.ts';
+import { buildUniqueIndex, enforceUniqueRow, getUniqueFields, validateEntityRow } from '../core/schema.ts';
 import type { EntityRow, WhereInput } from './where-operators.ts';
 import { toPredicates } from './where-operators.ts';
 
@@ -52,10 +52,17 @@ export class UpdateQuery implements PromiseLike<UpdateExecutionResult> {
     const predicates = toPredicates(this.whereConditions);
     const currentRows = await this.dependencies.loadEntityRows(this.entity.name);
 
+    const matched = currentRows.map(
+      (row) => predicates.length === 0 || predicates.every((predicate) => predicate.test(row)),
+    );
+    const uniqueIndex = buildUniqueIndex(
+      getUniqueFields(this.entity),
+      currentRows.filter((_, index) => !matched[index]),
+    );
+
     const updatedRows: EntityRow[] = [];
-    const nextRows = currentRows.map((row) => {
-      const matches = predicates.length === 0 || predicates.every((predicate) => predicate.test(row));
-      if (!matches) {
+    const nextRows = currentRows.map((row, index) => {
+      if (!matched[index]) {
         return row;
       }
 
@@ -64,6 +71,8 @@ export class UpdateQuery implements PromiseLike<UpdateExecutionResult> {
       if (!validation.valid) {
         throw new Error(`Invalid update row for ${this.entity.name}: ${validation.errors.join(', ')}`);
       }
+
+      enforceUniqueRow(this.entity.name, uniqueIndex, updated);
 
       updatedRows.push(updated);
       return updated;

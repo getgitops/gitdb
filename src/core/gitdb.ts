@@ -33,6 +33,21 @@ export class GitDB {
     await this.repository.shutdown();
   }
 
+  /** Pushes the pending commits right now. */
+  async sync(): Promise<void> {
+    await this.repository.sync('manual');
+  }
+
+  /** Number of local commits not pushed to the remote branch. */
+  getPendingCommits(): Promise<number> {
+    return this.repository.getPendingCommits();
+  }
+
+  /** True when there is nothing pending to commit nor to push. */
+  isSynced(): Promise<boolean> {
+    return this.repository.isSynced();
+  }
+
   private static createGlobalRegistry(): RelationsRegistry {
     return {
       for() {
@@ -183,6 +198,7 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
     repositoryUrl,
     autoCommitIntervalMs: options.autoCommitIntervalMs ?? 60_000,
     immediateCommitDelayMs: options.immediateCommitDelayMs ?? 800,
+    syncPollSeconds: options.syncPollSeconds ?? 60,
     gitUserName: options.gitUserName ?? 'gitdb-bot',
     gitUserEmail: options.gitUserEmail ?? 'gitdb-bot@local',
     logger: options.logger ?? logger,

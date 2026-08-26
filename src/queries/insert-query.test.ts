@@ -117,4 +117,33 @@ describe('InsertQuery', () => {
     const result = await query.values({ name: 'awaitable' }).returning(['id']);
     expect(result.rows).toEqual([{ id: 1 }]);
   });
+
+  it('rechaza valores duplicados en campos unique', async () => {
+    let persistedRows: Row[] = [{ id: 1, email: 'ana@kettu.dev' }];
+    const users = entity('users', {
+      id: integer().primaryKey().autoincrement(),
+      email: text().notNull().unique(),
+    });
+
+    const createQuery = () =>
+      new InsertQuery(users, {
+        loadEntityRows: async () => [...persistedRows],
+        saveEntityRows: async (_entityName, rows) => {
+          persistedRows = [...rows];
+        },
+        queueCommit: () => undefined,
+      });
+
+    await expect(createQuery().values({ email: 'ana@kettu.dev' }).execute()).rejects.toThrow(
+      'Duplicate value for unique field users.email: ana@kettu.dev',
+    );
+
+    await expect(
+      createQuery()
+        .values([{ email: 'beto@kettu.dev' }, { email: 'beto@kettu.dev' }])
+        .execute(),
+    ).rejects.toThrow('Duplicate value for unique field users.email: beto@kettu.dev');
+
+    expect(persistedRows).toHaveLength(1);
+  });
 });

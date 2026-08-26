@@ -336,3 +336,53 @@ export function validateEntityRow(
     errors,
   };
 }
+
+export type UniqueIndex = Map<string, Set<string>>;
+
+export function getUniqueFields(entityDefinition: EntityDefinition): string[] {
+  return Object.entries(entityDefinition.schema)
+    .filter(([, fieldDefinition]) => Boolean(fieldDefinition.unique) || Boolean(fieldDefinition.primaryKey))
+    .map(([fieldName]) => fieldName);
+}
+
+function uniqueKey(value: unknown): string {
+  if (typeof value === 'object') {
+    return `json:${JSON.stringify(value)}`;
+  }
+
+  return `${typeof value}:${String(value)}`;
+}
+
+export function buildUniqueIndex(fields: string[], rows: Record<string, unknown>[]): UniqueIndex {
+  const index: UniqueIndex = new Map(fields.map((field) => [field, new Set<string>()]));
+
+  for (const row of rows) {
+    for (const [field, values] of index) {
+      const value = row[field];
+      if (value === null || value === undefined) {
+        continue;
+      }
+
+      values.add(uniqueKey(value));
+    }
+  }
+
+  return index;
+}
+
+/** Throws when the row collides with an already indexed value, otherwise registers it. */
+export function enforceUniqueRow(entityName: string, index: UniqueIndex, row: Record<string, unknown>): void {
+  for (const [field, values] of index) {
+    const value = row[field];
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    const key = uniqueKey(value);
+    if (values.has(key)) {
+      throw new Error(`Duplicate value for unique field ${entityName}.${field}: ${String(value)}`);
+    }
+
+    values.add(key);
+  }
+}
