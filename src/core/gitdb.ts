@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { GitRepository } from '../infrastructure/git-repository.ts';
 import { GitDbLogger } from '../infrastructure/logger.ts';
 import { FileManager } from '../infrastructure/file-manager.ts';
@@ -204,7 +203,7 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
     logger: options.logger ?? logger,
   });
 
-  const fileManager = new FileManager(path.resolve(process.cwd(), '.gitdb'));
+  const fileManager = new FileManager('/data/gitdb');
 
   void repository.initialize();
 

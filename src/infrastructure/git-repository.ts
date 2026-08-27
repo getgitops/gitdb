@@ -28,7 +28,7 @@ export class GitRepository {
 
   constructor(options: ResolvedGitDbOptions) {
     this.repositoryUrl = options.repositoryUrl;
-    this.repoPath = path.resolve(process.cwd(), '.gitdb');
+    this.repoPath = '/data/gitdb';
     this.manifestPath = path.join(this.repoPath, 'gitdb.manifest.json');
     this.autoCommitIntervalMs = options.autoCommitIntervalMs;
     this.immediateCommitDelayMs = options.immediateCommitDelayMs;
