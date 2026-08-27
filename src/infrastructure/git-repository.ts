@@ -199,6 +199,26 @@ export class GitRepository {
     return filterAuditEvents(events, options);
   }
 
+  /** Contents of `<entity>.json` at a given revision, or null when it didn't exist there. */
+  async getEntityFileAt(revision: string, entity: string): Promise<unknown[] | null> {
+    try {
+      const content = await this.captureGit(['show', `${revision}:${entity}.json`]);
+      const parsed = JSON.parse(content);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Entity rows before and after the given commit, for row-level diffing. */
+  async getEntityDiff(commitHash: string, entity: string): Promise<{ before: unknown[] | null; after: unknown[] | null }> {
+    const [before, after] = await Promise.all([
+      this.getEntityFileAt(`${commitHash}^`, entity),
+      this.getEntityFileAt(commitHash, entity),
+    ]);
+    return { before, after };
+  }
+
   async shutdown(): Promise<void> {
     this.logger.info('[gitdb] shutting down repository');
 

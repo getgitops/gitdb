@@ -5,7 +5,7 @@ import { FileManager } from '../infrastructure/file-manager.ts';
 import type { EntityDefinition } from './schema.ts';
 import { getGlobalRelations, type RelationsRegistry } from './relations.ts';
 import type { GitDbOptions } from '../types.ts';
-import type { AuditQueryOptions, AuditQueryResult } from './audit.ts';
+import { diffEntityRows, type AuditQueryOptions, type AuditQueryResult, type EntityRowChange } from './audit.ts';
 import { DeleteQuery } from '../queries/delete-query.ts';
 import { InsertQuery } from '../queries/insert-query.ts';
 import { SelectQuery, type IncludeRelationsInput, type SelectFieldsInput } from '../queries/select-query.ts';
@@ -64,6 +64,12 @@ export class GitDB {
   /** Reads the commit history as audit events, with optional search/pagination. */
   auditLog(options?: AuditQueryOptions): Promise<AuditQueryResult> {
     return this.repository.getAuditEvents(options);
+  }
+
+  /** Row-level diff of an entity's changes introduced by a given commit. */
+  async entityDiff(commitHash: string, entity: string): Promise<EntityRowChange[]> {
+    const { before, after } = await this.repository.getEntityDiff(commitHash, entity);
+    return diffEntityRows(before, after);
   }
 
   private static createGlobalRegistry(): RelationsRegistry {

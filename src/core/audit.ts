@@ -6,19 +6,19 @@ export type AuditEvent = {
   commitHash: string;
   /** ISO-8601 commit timestamp. */
   timestamp: string;
+  /** Git commit author name. */
+  author: string;
   /** Entity/table affected, null when the commit reason has no `action:entity` shape. */
   entity: string | null;
   action: AuditAction;
   /** Raw reason string this event was parsed from, e.g. `insert:organizations`. */
   reason: string;
-  /** What caused the commit (`manual`, `auto-background`, `auto-interval`, `shutdown`, ...), if present. */
-  trigger: string | null;
   /** Full commit subject line. */
   message: string;
 };
 
 export type AuditQueryOptions = {
-  /** Case-insensitive match against entity, action, reason, trigger and message. */
+  /** Case-insensitive match against entity, action, reason, author and message. */
   search?: string;
   entity?: string;
   action?: AuditAction;
@@ -46,8 +46,8 @@ export function parseAuditLog(rawLog: string): AuditEvent[] {
     .filter(Boolean);
 
   for (const commit of commits) {
-    const [hash, timestamp, subject] = commit.split(FIELD_SEPARATOR);
-    if (!hash || !timestamp || !subject) {
+    const [hash, timestamp, author, subject] = commit.split(FIELD_SEPARATOR);
+    if (!hash || !timestamp || !author || !subject) {
       continue;
     }
 
@@ -62,17 +62,15 @@ export function parseAuditLog(rawLog: string): AuditEvent[] {
       .filter(Boolean);
 
     const actionReasons = reasons.filter((reason) => ACTION_REASON_PATTERN.test(reason));
-    const triggerReasons = reasons.filter((reason) => !ACTION_REASON_PATTERN.test(reason));
-    const trigger = triggerReasons.length ? triggerReasons.join(', ') : null;
 
     if (!actionReasons.length) {
       events.push({
         commitHash: hash,
         timestamp,
+        author,
         entity: null,
         action: 'other',
         reason: reasons.join(', '),
-        trigger,
         message: subject,
       });
       continue;
@@ -83,10 +81,10 @@ export function parseAuditLog(rawLog: string): AuditEvent[] {
       events.push({
         commitHash: hash,
         timestamp,
+        author,
         entity: actionMatch[2],
         action: actionMatch[1] as AuditAction,
         reason,
-        trigger,
         message: subject,
       });
     }
@@ -97,7 +95,11 @@ export function parseAuditLog(rawLog: string): AuditEvent[] {
 
 /** git log arguments producing one record per commit, safe to parse with {@link parseAuditLog}. */
 export function formatAuditLogArgs(): string[] {
-  return ['log', '--date=iso-strict', `--pretty=format:%H${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%s${RECORD_SEPARATOR}`];
+  return [
+    'log',
+    '--date=iso-strict',
+    `--pretty=format:%H${FIELD_SEPARATOR}%ad${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%s${RECORD_SEPARATOR}`,
+  ];
 }
 
 export function filterAuditEvents(events: AuditEvent[], options: AuditQueryOptions = {}): AuditQueryResult {
@@ -116,7 +118,7 @@ export function filterAuditEvents(events: AuditEvent[], options: AuditQueryOptio
   const query = search?.trim().toLowerCase();
   if (query) {
     filtered = filtered.filter((event) =>
-      [event.message, event.reason, event.entity ?? '', event.action, event.trigger ?? '']
+      [event.message, event.reason, event.entity ?? '', event.action, event.author]
         .join(' ')
         .toLowerCase()
         .includes(query),
@@ -127,4 +129,48 @@ export function filterAuditEvents(events: AuditEvent[], options: AuditQueryOptio
   const page = limit !== undefined ? filtered.slice(offset, offset + limit) : filtered.slice(offset);
 
   return { events: page, total };
+}
+
+export type EntityRow = Record<string, unknown>;
+
+export type EntityRowChange =
+  | { type: 'added'; row: EntityRow }
+  | { type: 'removed'; row: EntityRow }
+  | { type: 'modified'; before: EntityRow; after: EntityRow; changedFields: string[] };
+
+/** Row-level diff between two revisions of an entity file, matched by `id` when present. */
+export function diffEntityRows(before: unknown[] | null, after: unknown[] | null): EntityRowChange[] {
+  const beforeRows = Array.isArray(before) ? (before as EntityRow[]) : [];
+  const afterRows = Array.isArray(after) ? (after as EntityRow[]) : [];
+
+  const keyOf = (row: EntityRow, index: number): string =>
+    row && typeof row === 'object' && 'id' in row ? String(row.id) : `#${index}:${JSON.stringify(row)}`;
+
+  const beforeMap = new Map(beforeRows.map((row, index) => [keyOf(row, index), row]));
+  const afterMap = new Map(afterRows.map((row, index) => [keyOf(row, index), row]));
+
+  const changes: EntityRowChange[] = [];
+
+  for (const [key, row] of afterMap) {
+    const beforeRow = beforeMap.get(key);
+    if (!beforeRow) {
+      changes.push({ type: 'added', row });
+      continue;
+    }
+
+    if (JSON.stringify(beforeRow) !== JSON.stringify(row)) {
+      const changedFields = Object.keys({ ...beforeRow, ...row }).filter(
+        (field) => JSON.stringify(beforeRow[field]) !== JSON.stringify(row[field]),
+      );
+      changes.push({ type: 'modified', before: beforeRow, after: row, changedFields });
+    }
+  }
+
+  for (const [key, row] of beforeMap) {
+    if (!afterMap.has(key)) {
+      changes.push({ type: 'removed', row });
+    }
+  }
+
+  return changes;
 }
