@@ -10,6 +10,7 @@ export {
 } from './core/audit.ts';
 export type {
 	AuditAction,
+	AuditActor,
 	AuditEvent,
 	AuditQueryOptions,
 	AuditQueryResult,

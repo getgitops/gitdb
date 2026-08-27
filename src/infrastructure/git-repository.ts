@@ -7,6 +7,7 @@ import {
   filterAuditEvents,
   formatAuditLogArgs,
   parseAuditLog,
+  type AuditActor,
   type AuditQueryOptions,
   type AuditQueryResult,
 } from '../core/audit.ts';
@@ -29,6 +30,7 @@ export class GitRepository {
 
   private hasPendingCommit = false;
   private pendingReasons = new Set<string>();
+  private pendingActor: AuditActor | null = null;
   private commitTimer: NodeJS.Timeout | null = null;
   private intervalTimer: NodeJS.Timeout | null = null;
   private syncTimer: NodeJS.Timeout | null = null;
@@ -95,9 +97,13 @@ export class GitRepository {
     }
   }
 
-  queueBackgroundCommit(reason: string): void {
+  queueBackgroundCommit(reason: string, actor?: AuditActor): void {
     this.hasPendingCommit = true;
     this.pendingReasons.add(reason);
+    if (actor) {
+      // last actor to queue a change before the debounced commit fires wins the attribution
+      this.pendingActor = actor;
+    }
 
     if (this.commitTimer) {
       return;
@@ -116,7 +122,9 @@ export class GitRepository {
 
     const runCommit = async () => {
       const reasons = Array.from(this.pendingReasons);
+      const actor = this.pendingActor;
       this.pendingReasons.clear();
+      this.pendingActor = null;
 
       this.logger.info('[gitdb] commit started');
 
@@ -130,7 +138,11 @@ export class GitRepository {
       }
 
       const message = `gitdb: ${reasons.join(', ') || 'update'} @ ${new Date().toISOString()}`;
-      await this.runGit(['commit', '-m', message]);
+      const commitArgs = ['commit', '-m', message];
+      if (actor) {
+        commitArgs.push('--author', `${actor.name} <${actor.email}>`);
+      }
+      await this.runGit(commitArgs);
       this.hasPendingCommit = false;
       this.logger.info('[gitdb] commit completed');
     };

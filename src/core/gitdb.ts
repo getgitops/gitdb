@@ -5,7 +5,13 @@ import { FileManager } from '../infrastructure/file-manager.ts';
 import type { EntityDefinition } from './schema.ts';
 import { getGlobalRelations, type RelationsRegistry } from './relations.ts';
 import type { GitDbOptions } from '../types.ts';
-import { diffEntityRows, type AuditQueryOptions, type AuditQueryResult, type EntityRowChange } from './audit.ts';
+import {
+  diffEntityRows,
+  type AuditActor,
+  type AuditQueryOptions,
+  type AuditQueryResult,
+  type EntityRowChange,
+} from './audit.ts';
 import { DeleteQuery } from '../queries/delete-query.ts';
 import { InsertQuery } from '../queries/insert-query.ts';
 import { SelectQuery, type IncludeRelationsInput, type SelectFieldsInput } from '../queries/select-query.ts';
@@ -24,17 +30,25 @@ export class GitDB {
   private readonly fileManager: FileManager;
   private readonly selectWithContext?: SelectWithContext;
   private readonly readyPromise: Promise<void>;
+  private readonly actor?: AuditActor;
 
   constructor(
     repository: GitRepository,
     fileManager: FileManager,
     selectWithContext?: SelectWithContext,
     readyPromise?: Promise<void>,
+    actor?: AuditActor,
   ) {
     this.repository = repository;
     this.fileManager = fileManager;
     this.selectWithContext = selectWithContext;
     this.readyPromise = readyPromise ?? Promise.resolve();
+    this.actor = actor;
+  }
+
+  /** Scopes writes so their commits are attributed to `actor` instead of the configured git user. */
+  as(actor: AuditActor): GitDB {
+    return new GitDB(this.repository, this.fileManager, this.selectWithContext, this.readyPromise, actor);
   }
 
   /** Resolves once the local clone/manifest setup has finished; rejects if it failed. */
@@ -118,6 +132,7 @@ export class GitDB {
         includeRelations: includeRelations ?? null,
       },
       this.readyPromise,
+      this.actor,
     );
   }
 
@@ -171,7 +186,7 @@ export class GitDB {
     return new InsertQuery(entity, {
       loadEntityRows: (entityName) => this.fileManager.readEntityRows(entityName),
       saveEntityRows: (entityName, rows) => this.fileManager.writeEntityRows(entityName, rows),
-      queueCommit: (reason) => this.repository.queueBackgroundCommit(reason),
+      queueCommit: (reason) => this.repository.queueBackgroundCommit(reason, this.actor),
     });
   }
 
@@ -179,7 +194,7 @@ export class GitDB {
     return new UpdateQuery(entity, {
       loadEntityRows: (entityName) => this.fileManager.readEntityRows(entityName),
       saveEntityRows: (entityName, rows) => this.fileManager.writeEntityRows(entityName, rows),
-      queueCommit: (reason) => this.repository.queueBackgroundCommit(reason),
+      queueCommit: (reason) => this.repository.queueBackgroundCommit(reason, this.actor),
     });
   }
 
@@ -187,7 +202,7 @@ export class GitDB {
     return new DeleteQuery(entity, {
       loadEntityRows: (entityName) => this.fileManager.readEntityRows(entityName),
       saveEntityRows: (entityName, rows) => this.fileManager.writeEntityRows(entityName, rows),
-      queueCommit: (reason) => this.repository.queueBackgroundCommit(reason),
+      queueCommit: (reason) => this.repository.queueBackgroundCommit(reason, this.actor),
     });
   }
 

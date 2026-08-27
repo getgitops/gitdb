@@ -1,6 +1,12 @@
 /** Action encoded in a gitdb commit reason, e.g. `insert:organizations`. */
 export type AuditAction = 'insert' | 'update' | 'delete' | 'other';
 
+/** Identity attributed to a commit's author (distinct from the git committer, which stays the bot). */
+export type AuditActor = {
+  name: string;
+  email: string;
+};
+
 export type AuditEvent = {
   /** Full git commit hash the event was recorded in. */
   commitHash: string;
