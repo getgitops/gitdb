@@ -3,6 +3,13 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitDbOptions } from '../types.ts';
+import {
+  filterAuditEvents,
+  formatAuditLogArgs,
+  parseAuditLog,
+  type AuditQueryOptions,
+  type AuditQueryResult,
+} from '../core/audit.ts';
 
 export type ResolvedGitDbOptions = Required<Omit<GitDbOptions, 'logger'>> & {
   logger: any;
@@ -183,6 +190,13 @@ export class GitRepository {
 
     const dirty = (await this.captureGit(['status', '--porcelain'], true)).trim();
     return dirty.length === 0 && !this.hasPendingCommit;
+  }
+
+  /** Reads and parses the commit history into audit events, applying search/pagination. */
+  async getAuditEvents(options: AuditQueryOptions = {}): Promise<AuditQueryResult> {
+    const output = await this.captureGit(formatAuditLogArgs(), true);
+    const events = parseAuditLog(output);
+    return filterAuditEvents(events, options);
   }
 
   async shutdown(): Promise<void> {

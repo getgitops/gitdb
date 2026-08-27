@@ -1,5 +1,7 @@
 export { GitDB, gitDb } from './core/gitdb.ts';
 export { defineRelations } from './core/relations.ts';
+export { filterAuditEvents, formatAuditLogArgs, parseAuditLog } from './core/audit.ts';
+export type { AuditAction, AuditEvent, AuditQueryOptions, AuditQueryResult } from './core/audit.ts';
 export type {
 	EntityRelations,
 	ManyRelationConfig,

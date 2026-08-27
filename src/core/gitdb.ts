@@ -5,6 +5,7 @@ import { FileManager } from '../infrastructure/file-manager.ts';
 import type { EntityDefinition } from './schema.ts';
 import { getGlobalRelations, type RelationsRegistry } from './relations.ts';
 import type { GitDbOptions } from '../types.ts';
+import type { AuditQueryOptions, AuditQueryResult } from './audit.ts';
 import { DeleteQuery } from '../queries/delete-query.ts';
 import { InsertQuery } from '../queries/insert-query.ts';
 import { SelectQuery, type IncludeRelationsInput, type SelectFieldsInput } from '../queries/select-query.ts';
@@ -58,6 +59,11 @@ export class GitDB {
   /** True when there is nothing pending to commit nor to push. */
   isSynced(): Promise<boolean> {
     return this.repository.isSynced();
+  }
+
+  /** Reads the commit history as audit events, with optional search/pagination. */
+  auditLog(options?: AuditQueryOptions): Promise<AuditQueryResult> {
+    return this.repository.getAuditEvents(options);
   }
 
   private static createGlobalRegistry(): RelationsRegistry {
