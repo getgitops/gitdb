@@ -7,5 +7,7 @@ export type GitDbOptions = {
   gitUserName?: string;
   gitUserEmail?: string;
   logger?: import('./infrastructure/logger.ts').GitDbLoggerLike;
+  /** Defaults to `<cwd>/.gitdb` when omitted. */
+  dataPath?: string;
 };
 

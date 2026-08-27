@@ -6,6 +6,7 @@ import type { GitDbOptions } from '../types.ts';
 
 export type ResolvedGitDbOptions = Required<Omit<GitDbOptions, 'logger'>> & {
   logger: any;
+  dataPath: string;
 };
 
 export class GitRepository {
@@ -28,7 +29,7 @@ export class GitRepository {
 
   constructor(options: ResolvedGitDbOptions) {
     this.repositoryUrl = options.repositoryUrl;
-    this.repoPath = '/data/gitdb';
+    this.repoPath = options.dataPath;
     this.manifestPath = path.join(this.repoPath, 'gitdb.manifest.json');
     this.autoCommitIntervalMs = options.autoCommitIntervalMs;
     this.immediateCommitDelayMs = options.immediateCommitDelayMs;

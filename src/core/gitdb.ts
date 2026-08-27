@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { GitRepository } from '../infrastructure/git-repository.ts';
 import { GitDbLogger } from '../infrastructure/logger.ts';
 import { FileManager } from '../infrastructure/file-manager.ts';
@@ -21,11 +22,23 @@ export class GitDB {
   private readonly repository: GitRepository;
   private readonly fileManager: FileManager;
   private readonly selectWithContext?: SelectWithContext;
+  private readonly readyPromise: Promise<void>;
 
-  constructor(repository: GitRepository, fileManager: FileManager, selectWithContext?: SelectWithContext) {
+  constructor(
+    repository: GitRepository,
+    fileManager: FileManager,
+    selectWithContext?: SelectWithContext,
+    readyPromise?: Promise<void>,
+  ) {
     this.repository = repository;
     this.fileManager = fileManager;
     this.selectWithContext = selectWithContext;
+    this.readyPromise = readyPromise ?? Promise.resolve();
+  }
+
+  /** Resolves once the local clone/manifest setup has finished; rejects if it failed. */
+  ready(): Promise<void> {
+    return this.readyPromise;
   }
 
   async close(): Promise<void> {
@@ -85,10 +98,15 @@ export class GitDB {
       ? includeRelationsMaybe
       : (relationsOrInclude as IncludeRelationsInput | undefined);
 
-    return new GitDB(this.repository, this.fileManager, {
-      relationsRegistry,
-      includeRelations: includeRelations ?? null,
-    });
+    return new GitDB(
+      this.repository,
+      this.fileManager,
+      {
+        relationsRegistry,
+        includeRelations: includeRelations ?? null,
+      },
+      this.readyPromise,
+    );
   }
 
   select(fields?: SelectFieldsInput): SelectQuery {
@@ -190,10 +208,14 @@ export class GitDB {
   }
 }
 
+export const DEFAULT_DATA_PATH = path.join(process.cwd(), '.gitdb');
+
 export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions, 'repositoryUrl'>> = {}): GitDB {
   const logger = new GitDbLogger(options.logger);
+  const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;
 
   const repository = new GitRepository({
+    dataPath,
     repositoryUrl,
     autoCommitIntervalMs: options.autoCommitIntervalMs ?? 60_000,
     immediateCommitDelayMs: options.immediateCommitDelayMs ?? 800,
@@ -203,9 +225,11 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
     logger: options.logger ?? logger,
   });
 
-  const fileManager = new FileManager('/data/gitdb');
+  const fileManager = new FileManager(dataPath);
 
-  void repository.initialize();
+  // initialize() must never become an unhandled rejection; real callers observe failures via GitDB.ready()
+  const readyPromise = repository.initialize();
+  readyPromise.catch(() => {});
 
-  return new GitDB(repository, fileManager);
+  return new GitDB(repository, fileManager, undefined, readyPromise);
 }
