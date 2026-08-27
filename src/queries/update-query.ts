@@ -1,3 +1,4 @@
+import { formatCommitReason, resolveOrganizationId } from '../core/audit.ts';
 import type { EntityDefinition } from '../core/schema.ts';
 import { buildUniqueIndex, enforceUniqueRow, getUniqueFields, validateEntityRow } from '../core/schema.ts';
 import type { EntityRow, WhereInput } from './where-operators.ts';
@@ -80,7 +81,8 @@ export class UpdateQuery implements PromiseLike<UpdateExecutionResult> {
 
     if (updatedRows.length > 0) {
       await this.dependencies.saveEntityRows(this.entity.name, nextRows);
-      this.dependencies.queueCommit(`update:${this.entity.name}`);
+      const organizationId = resolveOrganizationId(this.entity.name, updatedRows);
+      this.dependencies.queueCommit(formatCommitReason('update', this.entity.name, organizationId));
     }
 
     const rows = this.shouldReturn ? updatedRows.map((row) => this.pickReturningFields(row)) : [];

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { formatCommitReason, resolveOrganizationId } from '../core/audit.ts';
 import type { EntityDefinition } from '../core/schema.ts';
 import { buildUniqueIndex, enforceUniqueRow, getUniqueFields, validateEntityRow } from '../core/schema.ts';
 
@@ -63,7 +64,8 @@ export class InsertQuery implements PromiseLike<InsertExecutionResult> {
 
     const allRows = [...existingRows, ...insertedRows];
     await this.dependencies.saveEntityRows(this.entity.name, allRows);
-    this.dependencies.queueCommit(`insert:${this.entity.name}`);
+    const organizationId = resolveOrganizationId(this.entity.name, insertedRows);
+    this.dependencies.queueCommit(formatCommitReason('insert', this.entity.name, organizationId));
 
     const rows = this.shouldReturn
       ? insertedRows.map((row) => this.pickReturningFields(row))

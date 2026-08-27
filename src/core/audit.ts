@@ -11,6 +11,8 @@ export type AuditEvent = {
   /** Entity/table affected, null when the commit reason has no `action:entity` shape. */
   entity: string | null;
   action: AuditAction;
+  /** Organization the affected row(s) belong to, when it could be resolved. */
+  organizationId: string | null;
   /** Raw reason string this event was parsed from, e.g. `insert:organizations`. */
   reason: string;
   /** Full commit subject line. */
@@ -22,6 +24,11 @@ export type AuditQueryOptions = {
   search?: string;
   entity?: string;
   action?: AuditAction;
+  organizationId?: string;
+  /** Inclusive lower bound; accepts a date (`2026-08-01`) or full ISO timestamp. */
+  dateFrom?: string;
+  /** Inclusive upper bound; a date-only value covers the whole day. */
+  dateTo?: string;
   limit?: number;
   offset?: number;
 };
@@ -32,7 +39,8 @@ export type AuditQueryResult = {
 };
 
 const COMMIT_SUBJECT_PATTERN = /^gitdb: (.+) @ (.+)$/;
-const ACTION_REASON_PATTERN = /^(insert|update|delete):(.+)$/;
+// entity is optionally suffixed with `@<organizationId>`, e.g. `insert:projects@39bfbb93-...`
+const ACTION_REASON_PATTERN = /^(insert|update|delete):([^@]+)(?:@(.+))?$/;
 const RECORD_SEPARATOR = '\x1e';
 const FIELD_SEPARATOR = '\x1f';
 
@@ -70,6 +78,7 @@ export function parseAuditLog(rawLog: string): AuditEvent[] {
         author,
         entity: null,
         action: 'other',
+        organizationId: null,
         reason: reasons.join(', '),
         message: subject,
       });
@@ -84,6 +93,7 @@ export function parseAuditLog(rawLog: string): AuditEvent[] {
         author,
         entity: actionMatch[2],
         action: actionMatch[1] as AuditAction,
+        organizationId: actionMatch[3] ?? null,
         reason,
         message: subject,
       });
@@ -102,8 +112,10 @@ export function formatAuditLogArgs(): string[] {
   ];
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 export function filterAuditEvents(events: AuditEvent[], options: AuditQueryOptions = {}): AuditQueryResult {
-  const { search, entity, action, limit, offset = 0 } = options;
+  const { search, entity, action, organizationId, dateFrom, dateTo, limit, offset = 0 } = options;
 
   let filtered = events;
 
@@ -113,6 +125,29 @@ export function filterAuditEvents(events: AuditEvent[], options: AuditQueryOptio
 
   if (action) {
     filtered = filtered.filter((event) => event.action === action);
+  }
+
+  if (organizationId) {
+    filtered = filtered.filter((event) => event.organizationId === organizationId);
+  }
+
+  if (dateFrom) {
+    const fromTime = new Date(dateFrom).getTime();
+    if (!Number.isNaN(fromTime)) {
+      filtered = filtered.filter((event) => new Date(event.timestamp).getTime() >= fromTime);
+    }
+  }
+
+  if (dateTo) {
+    const toDate = new Date(dateTo);
+    if (!Number.isNaN(toDate.getTime())) {
+      // a bare date (no time-of-day) should cover the whole day it names
+      if (DATE_ONLY_PATTERN.test(dateTo)) {
+        toDate.setHours(23, 59, 59, 999);
+      }
+      const toTime = toDate.getTime();
+      filtered = filtered.filter((event) => new Date(event.timestamp).getTime() <= toTime);
+    }
   }
 
   const query = search?.trim().toLowerCase();
@@ -129,6 +164,33 @@ export function filterAuditEvents(events: AuditEvent[], options: AuditQueryOptio
   const page = limit !== undefined ? filtered.slice(offset, offset + limit) : filtered.slice(offset);
 
   return { events: page, total };
+}
+
+/** Builds a commit reason, scoped to an organization when one can be resolved (see {@link resolveOrganizationId}). */
+export function formatCommitReason(
+  action: 'insert' | 'update' | 'delete',
+  entity: string,
+  organizationId?: string | null,
+): string {
+  return organizationId ? `${action}:${entity}@${organizationId}` : `${action}:${entity}`;
+}
+
+/**
+ * Best-effort organization id for a batch of affected rows: the entity's own id when it *is*
+ * the organizations table, otherwise a shared `organizationId` field. Returns null when the
+ * rows don't agree on a single organization (or don't reference one at all).
+ */
+export function resolveOrganizationId(entityName: string, rows: Record<string, unknown>[]): string | null {
+  const ids = new Set<string>();
+
+  for (const row of rows) {
+    const raw = entityName === 'organizations' ? row.id : row.organizationId;
+    if (typeof raw === 'string' && raw) {
+      ids.add(raw);
+    }
+  }
+
+  return ids.size === 1 ? [...ids][0] : null;
 }
 
 export type EntityRow = Record<string, unknown>;

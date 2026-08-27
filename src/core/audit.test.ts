@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffEntityRows, filterAuditEvents, parseAuditLog } from './audit.ts';
+import { diffEntityRows, filterAuditEvents, formatCommitReason, parseAuditLog, resolveOrganizationId } from './audit.ts';
 
 const RS = '\x1e';
 const FS = '\x1f';
@@ -40,6 +40,23 @@ describe('audit log', () => {
     expect(parseAuditLog(raw)).toHaveLength(0);
   });
 
+  it('filtra eventos por rango de fechas', () => {
+    const events = parseAuditLog(
+      commitLine('d1', '2026-08-25T10:00:00+00:00', 'alice', 'gitdb: insert:organizations, auto-background @ t1') +
+        commitLine('d2', '2026-08-26T10:00:00+00:00', 'alice', 'gitdb: update:roles, manual @ t2') +
+        commitLine('d3', '2026-08-27T10:00:00+00:00', 'alice', 'gitdb: delete:users, auto-background @ t3'),
+    );
+
+    const fromOnly = filterAuditEvents(events, { dateFrom: '2026-08-26' });
+    expect(fromOnly.events.map((event) => event.commitHash).sort()).toEqual(['d2', 'd3']);
+
+    const toOnly = filterAuditEvents(events, { dateTo: '2026-08-26' });
+    expect(toOnly.events.map((event) => event.commitHash).sort()).toEqual(['d1', 'd2']);
+
+    const range = filterAuditEvents(events, { dateFrom: '2026-08-26', dateTo: '2026-08-26' });
+    expect(range.events.map((event) => event.commitHash)).toEqual(['d2']);
+  });
+
   it('filtra eventos por busqueda y pagina resultados', () => {
     const events = parseAuditLog(
       commitLine('a1', '2026-08-27T13:00:00+00:00', 'alice', 'gitdb: insert:organizations, auto-background @ t1') +
@@ -58,6 +75,36 @@ describe('audit log', () => {
     const paged = filterAuditEvents(events, { limit: 1, offset: 1 });
     expect(paged.total).toBe(3);
     expect(paged.events).toHaveLength(1);
+  });
+
+  it('extrae y filtra por organizationId cuando la razon lo incluye', () => {
+    const events = parseAuditLog(
+      commitLine('o1', '2026-08-27T13:00:00+00:00', 'alice', 'gitdb: insert:projects@org-1, auto-background @ t1') +
+        commitLine('o2', '2026-08-27T13:01:00+00:00', 'alice', 'gitdb: update:projects@org-2, manual @ t2'),
+    );
+
+    expect(events[1]).toMatchObject({ entity: 'projects', organizationId: 'org-1' });
+    expect(events[0]).toMatchObject({ entity: 'projects', organizationId: 'org-2' });
+
+    const scoped = filterAuditEvents(events, { organizationId: 'org-1' });
+    expect(scoped.total).toBe(1);
+    expect(scoped.events[0].commitHash).toBe('o1');
+  });
+});
+
+describe('commit reason helpers', () => {
+  it('formatCommitReason agrega el organizationId cuando se resuelve', () => {
+    expect(formatCommitReason('insert', 'projects', 'org-1')).toBe('insert:projects@org-1');
+    expect(formatCommitReason('insert', 'projects', null)).toBe('insert:projects');
+  });
+
+  it('resolveOrganizationId usa el id propio para organizations y organizationId para el resto', () => {
+    expect(resolveOrganizationId('organizations', [{ id: 'org-1' }])).toBe('org-1');
+    expect(resolveOrganizationId('projects', [{ id: 'p1', organizationId: 'org-1' }])).toBe('org-1');
+    expect(
+      resolveOrganizationId('projects', [{ organizationId: 'org-1' }, { organizationId: 'org-2' }]),
+    ).toBeNull();
+    expect(resolveOrganizationId('projects', [{ id: 'p1' }])).toBeNull();
   });
 });
 

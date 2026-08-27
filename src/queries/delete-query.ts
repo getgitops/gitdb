@@ -1,3 +1,4 @@
+import { formatCommitReason, resolveOrganizationId } from '../core/audit.ts';
 import type { EntityDefinition } from '../core/schema.ts';
 import type { EntityRow, WhereInput } from './where-operators.ts';
 import { toPredicates } from './where-operators.ts';
@@ -53,7 +54,8 @@ export class DeleteQuery implements PromiseLike<DeleteExecutionResult> {
 
     if (deletedRows.length > 0) {
       await this.dependencies.saveEntityRows(this.entity.name, keptRows);
-      this.dependencies.queueCommit(`delete:${this.entity.name}`);
+      const organizationId = resolveOrganizationId(this.entity.name, deletedRows);
+      this.dependencies.queueCommit(formatCommitReason('delete', this.entity.name, organizationId));
     }
 
     const rows = this.shouldReturn ? deletedRows.map((row) => this.pickReturningFields(row)) : [];

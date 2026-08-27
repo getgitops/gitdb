@@ -1,6 +1,13 @@
 export { GitDB, gitDb } from './core/gitdb.ts';
 export { defineRelations } from './core/relations.ts';
-export { diffEntityRows, filterAuditEvents, formatAuditLogArgs, parseAuditLog } from './core/audit.ts';
+export {
+	diffEntityRows,
+	filterAuditEvents,
+	formatAuditLogArgs,
+	formatCommitReason,
+	parseAuditLog,
+	resolveOrganizationId,
+} from './core/audit.ts';
 export type {
 	AuditAction,
 	AuditEvent,
