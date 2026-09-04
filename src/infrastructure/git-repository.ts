@@ -23,9 +23,12 @@ export class GitRepository {
   private readonly autoCommitIntervalMs: number;
   private readonly immediateCommitDelayMs: number;
   private readonly syncPollMs: number;
+  private readonly syncMode: 'poll' | 'immediate';
   private readonly gitUserName: string;
   private readonly gitUserEmail: string;
   private readonly manifestPath: string;
+  private readonly authToken: string;
+  private readonly authUsername: string;
   private readonly logger: any;
 
   private hasPendingCommit = false;
@@ -43,8 +46,11 @@ export class GitRepository {
     this.autoCommitIntervalMs = options.autoCommitIntervalMs;
     this.immediateCommitDelayMs = options.immediateCommitDelayMs;
     this.syncPollMs = Math.max(0, options.syncPollSeconds) * 1000;
+    this.syncMode = options.syncMode;
     this.gitUserName = options.gitUserName;
     this.gitUserEmail = options.gitUserEmail;
+    this.authToken = options.authToken;
+    this.authUsername = options.authUsername;
     this.logger = options.logger;
   }
 
@@ -57,8 +63,11 @@ export class GitRepository {
 
     if (!existsSync(path.join(this.repoPath, '.git'))) {
       this.logger.info('[gitdb] cloning repository');
-      await this.runGit(['clone', this.repositoryUrl, this.repoPath], false, process.cwd());
+      await this.runGit(['clone', this.getAuthenticatedUrl(), this.repoPath], false, process.cwd());
       this.logger.info('[gitdb] clone completed');
+    } else if (this.authToken) {
+      // keep origin in sync in case the token rotated since the last run
+      await this.runGit(['remote', 'set-url', 'origin', this.getAuthenticatedUrl()]);
     }
 
     await this.runGit(['config', 'user.name', this.gitUserName]);
@@ -71,7 +80,8 @@ export class GitRepository {
         `${JSON.stringify(
           {
             kind: 'gitdb',
-            repositoryUrl: this.repositoryUrl,
+            // never persist credentials: this file is committed to the repo itself
+            repositoryUrl: this.sanitizedRepositoryUrl(),
             createdAt: new Date().toISOString(),
           },
           null,
@@ -88,7 +98,7 @@ export class GitRepository {
       });
     }, this.autoCommitIntervalMs);
 
-    if (this.syncPollMs > 0) {
+    if (this.syncMode === 'poll' && this.syncPollMs > 0) {
       this.syncTimer = setInterval(() => {
         void this.sync('auto-poll').catch(() => {
           // Background syncs must not create unhandled rejections.
@@ -145,6 +155,11 @@ export class GitRepository {
       await this.runGit(commitArgs);
       this.hasPendingCommit = false;
       this.logger.info('[gitdb] commit completed');
+
+      if (this.syncMode === 'immediate') {
+        // run inline (not via sync()) to avoid re-entering the commitQueue we're already inside
+        await this.pushPendingCommits(reason);
+      }
     };
 
     this.commitQueue = this.commitQueue.then(runCommit, runCommit);
@@ -154,29 +169,31 @@ export class GitRepository {
 
   /** Pushes the local commits that are ahead of the remote branch. Never commits. */
   async sync(reason = 'manual'): Promise<void> {
-    const runSync = async () => {
-      const pending = await this.getPendingCommits();
-
-      if (pending === 0) {
-        this.logger.info('[gitdb] sync skipped, nothing to push', { repoPath: this.repoPath, reason });
-        return;
-      }
-
-      const branch = await this.getCurrentBranch();
-      this.logger.info('[gitdb] push started', { repoPath: this.repoPath, reason, branch, pending });
-
-      try {
-        await this.runGit(['push', '--set-upstream', 'origin', branch]);
-        this.logger.info('[gitdb] push completed', { repoPath: this.repoPath, branch, pushed: pending });
-      } catch (error) {
-        this.logger.error('[gitdb] push failed', { repoPath: this.repoPath, branch, error: String(error) });
-        throw error;
-      }
-    };
+    const runSync = () => this.pushPendingCommits(reason);
 
     this.commitQueue = this.commitQueue.then(runSync, runSync);
 
     return this.commitQueue;
+  }
+
+  private async pushPendingCommits(reason: string): Promise<void> {
+    const pending = await this.getPendingCommits();
+
+    if (pending === 0) {
+      this.logger.info('[gitdb] sync skipped, nothing to push', { repoPath: this.repoPath, reason });
+      return;
+    }
+
+    const branch = await this.getCurrentBranch();
+    this.logger.info('[gitdb] push started', { repoPath: this.repoPath, reason, branch, pending });
+
+    try {
+      await this.runGit(['push', '--set-upstream', 'origin', branch]);
+      this.logger.info('[gitdb] push completed', { repoPath: this.repoPath, branch, pushed: pending });
+    } catch (error) {
+      this.logger.error('[gitdb] push failed', { repoPath: this.repoPath, branch, error: String(error) });
+      throw error;
+    }
   }
 
   /** Number of local commits not present on the remote branch. */
@@ -253,11 +270,10 @@ export class GitRepository {
       await this.commitNow('shutdown');
     }
 
-    if (this.syncPollMs > 0) {
-      await this.sync('shutdown').catch(() => {
-        // Shutdown must not fail because the remote is unreachable.
-      });
-    }
+    // no-op when nothing is pending, so safe to call regardless of syncMode
+    await this.sync('shutdown').catch(() => {
+      // Shutdown must not fail because the remote is unreachable.
+    });
 
     await this.commitQueue;
     this.logger.info('[gitdb] repository shutdown completed', { repoPath: this.repoPath });
@@ -266,6 +282,30 @@ export class GitRepository {
   private async hasStagedChanges(): Promise<boolean> {
     const result = await this.runGit(['diff', '--cached', '--quiet'], true);
     return result !== 0;
+  }
+
+  /** Embeds the PAT as basic-auth credentials in the remote URL (persisted in .git/config on disk). */
+  private getAuthenticatedUrl(): string {
+    if (!this.authToken) {
+      return this.repositoryUrl;
+    }
+
+    const url = new URL(this.repositoryUrl);
+    url.username = this.authUsername;
+    url.password = this.authToken;
+    return url.toString();
+  }
+
+  /** Strips any embedded userinfo so credentials never reach the manifest, logs or API responses. */
+  private sanitizedRepositoryUrl(): string {
+    try {
+      const url = new URL(this.repositoryUrl);
+      url.username = '';
+      url.password = '';
+      return url.toString();
+    } catch {
+      return this.repositoryUrl;
+    }
   }
 
   private async getCurrentBranch(): Promise<string> {

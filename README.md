@@ -52,14 +52,25 @@ export const Post = entity('posts', {
 ```ts
 import { gitDb } from '@getgitops/gitdb';
 
-const db = await gitDb({
-  dir: '/path/to/repo',
-  author: {
-    name: 'App Bot',
-    email: 'bot@example.com'
-  }
+const db = gitDb('https://github.com/org/repo.git', {
+  gitUserName: 'App Bot',
+  gitUserEmail: 'bot@example.com',
+});
+
+await db.ready();
+```
+
+#### Autenticación con Personal Access Token
+
+Si el repositorio remoto es privado, pasa un token de acceso personal de GitHub vía `authToken` (recomendado tomarlo de una variable de entorno) o simplemente define `GITDB_GITHUB_TOKEN`/`GITHUB_TOKEN` en el entorno y `gitDb` lo detecta automáticamente:
+
+```ts
+const db = gitDb('https://github.com/org/repo.git', {
+  authToken: process.env.GITHUB_TOKEN,
 });
 ```
+
+El token nunca se define en `repositoryUrl`; `gitdb` lo agrega automáticamente como credenciales en la URL del remoto (`origin`) al clonar/sincronizar el repo local.
 
 ### 3. Operaciones CRUD
 
@@ -210,45 +221,39 @@ npm run demo         # Demo interactivo
 
 ## Publicación y Release
 
-### Workflow de Changesets
+Los releases son manuales, con tags de Git. No se usa changesets.
 
-1. **Crear cambios** - Edita los archivos normalmente
-2. **Generar changeset** - Ejecuta:
+1. Asegúrate de estar en `main` con los cambios ya mergeados y el árbol limpio.
+2. Sube la versión en `package.json` y crea el tag `vX.Y.Z` en un solo paso:
    ```bash
-   npm run changeset
+   npm version patch   # o: npm version minor / npm version major
    ```
-   Esto crea un archivo en `.changeset/` describiendo los cambios
+3. Sube el commit de versión y el tag:
+   ```bash
+   git push && git push --tags
+   ```
+4. El push del tag `vX.Y.Z` dispara el workflow `.github/workflows/release.yml`, que compila, testea y publica el paquete en NPM.
 
-3. **Crear PR de versión** - Push a `main`/`develop`, GitHub Actions crea PR de versión automáticamente
+### Publicación manual (sin Actions)
 
-4. **Merge PR** - Se publica automáticamente en NPM
-
-### Publicación Manual
+Requiere sesión activa con `npm login` y permisos de publish en el paquete:
 
 ```bash
 npm run release
 ```
 
-Esto:
-1. Ejecuta type check y tests
-2. Genera version automática (Semantic Versioning)
-3. Publica en NPM
+Esto ejecuta clean, build, typecheck, test y `npm publish`.
 
 ### Secretos Requeridos
 
 Configura en GitHub (Settings → Secrets):
-- `NPM_TOKEN` - Token de acceso a NPM
+- `NPM_TOKEN` - Token de acceso a NPM (con permiso de publish)
 
 ## GitHub Actions
 
-### test.yml
-Ejecuta tests en push/PR a `main` y `develop` con Node 20 y 22.
-
-### publish-npm.yml
-Publica en NPM en push a `main` o con tag `gitdb-vX.Y.Z`.
-
-### changesets-release.yml
-Maneja releases automáticos basado en changesets.
+### release.yml
+- Job `test`: corre typecheck y tests en cada push/PR a `main`/`develop`, con Node 20 y 22.
+- Job `publish`: solo corre cuando se pushea un tag `vX.Y.Z` (por ejemplo tras `npm version patch && git push --tags`); compila, testea y publica en NPM usando `NPM_TOKEN`.
 
 ## Estructura de Proyectos
 
@@ -272,14 +277,8 @@ Maneja releases automáticos basado en changesets.
 │   ├── types.ts              # Tipos globales
 │   └── index.ts              # Exports públicos
 ├── tests/                    # E2E tests
-└── .changeset/               # Changesets para releases
 ```
 
 ## Licencia
 
 MIT
-  - Publica automaticamente al mergear la PR de version
-
-Requiere el secreto de repositorio:
-
-- NPM_TOKEN (token con permisos de publish en npm)

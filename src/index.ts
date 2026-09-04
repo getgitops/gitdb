@@ -1,4 +1,5 @@
 export { GitDB, gitDb } from './core/gitdb.ts';
+export type { GitDbOptions } from './types.ts';
 export { defineRelations } from './core/relations.ts';
 export {
 	diffEntityRows,

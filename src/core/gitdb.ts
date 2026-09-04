@@ -237,6 +237,13 @@ export class GitDB {
 
 export const DEFAULT_DATA_PATH = path.join(process.cwd(), '.gitdb');
 
+function resolveSyncMode(explicit?: 'poll' | 'immediate'): 'poll' | 'immediate' {
+  if (explicit === 'poll' || explicit === 'immediate') {
+    return explicit;
+  }
+  return process.env.GITDB_SYNC_MODE?.trim().toLowerCase() === 'immediate' ? 'immediate' : 'poll';
+}
+
 export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions, 'repositoryUrl'>> = {}): GitDB {
   const logger = new GitDbLogger(options.logger);
   const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;
@@ -247,9 +254,12 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
     autoCommitIntervalMs: options.autoCommitIntervalMs ?? 60_000,
     immediateCommitDelayMs: options.immediateCommitDelayMs ?? 800,
     syncPollSeconds: options.syncPollSeconds ?? 60,
+    syncMode: resolveSyncMode(options.syncMode),
     gitUserName: options.gitUserName ?? 'gitdb-bot',
     gitUserEmail: options.gitUserEmail ?? 'gitdb-bot@local',
     logger: options.logger ?? logger,
+    authToken: options.authToken ?? process.env.GITDB_GITHUB_TOKEN ?? process.env.GITHUB_TOKEN ?? '',
+    authUsername: options.authUsername ?? 'x-access-token',
   });
 
   const fileManager = new FileManager(dataPath);

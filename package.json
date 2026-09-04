@@ -1,6 +1,6 @@
 {
   "name": "@getgitops/gitdb",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "GitDB is a lightweight, fast, and simple Git-based database for Node.js. It allows you to store and retrieve data in a Git repository, making it easy to version control your data.",
   "license": "MIT",
   "author": "kettu",
@@ -34,16 +34,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "demo": "npm run build && node --experimental-strip-types test-git-db.ts",
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "npm run clean && npm run build && npm run typecheck && npm run test && changeset publish",
+    "release": "npm run clean && npm run build && npm run typecheck && npm run test && npm publish",
     "prepublishOnly": "npm run clean && npm run build && npm run typecheck && npm run test"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.6",
     "@types/node": "^22.10.1",
     "tsup": "^8.3.5",
     "typescript": "^5.6.3",
