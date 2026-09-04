@@ -257,7 +257,9 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
     syncMode: resolveSyncMode(options.syncMode),
     gitUserName: options.gitUserName ?? 'gitdb-bot',
     gitUserEmail: options.gitUserEmail ?? 'gitdb-bot@local',
-    logger: options.logger ?? logger,
+    // always the wrapped logger: GitDbLoggerLike methods are optional, so passing the raw
+    // options.logger through would crash GitRepository on any method the caller left out
+    logger,
     authToken: options.authToken ?? process.env.GITDB_GITHUB_TOKEN ?? process.env.GITHUB_TOKEN ?? '',
     authUsername: options.authUsername ?? 'x-access-token',
   });

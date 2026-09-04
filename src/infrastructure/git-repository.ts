@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitDbOptions } from '../types.ts';
+import { GitDbLogger } from './logger.ts';
 import {
   filterAuditEvents,
   formatAuditLogArgs,
@@ -13,7 +14,7 @@ import {
 } from '../core/audit.ts';
 
 export type ResolvedGitDbOptions = Required<Omit<GitDbOptions, 'logger'>> & {
-  logger: any;
+  logger: GitDbLogger;
   dataPath: string;
 };
 
@@ -29,7 +30,7 @@ export class GitRepository {
   private readonly manifestPath: string;
   private readonly authToken: string;
   private readonly authUsername: string;
-  private readonly logger: any;
+  private readonly logger: GitDbLogger;
 
   private hasPendingCommit = false;
   private pendingReasons = new Set<string>();
