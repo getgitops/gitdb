@@ -27,6 +27,7 @@ export class GitRepository {
   private readonly gitUserName: string;
   private readonly gitUserEmail: string;
   private readonly manifestPath: string;
+  private readonly gitignorePath: string;
   private readonly authToken: string;
   private readonly authUsername: string;
   private readonly logger: any;
@@ -43,6 +44,7 @@ export class GitRepository {
     this.repositoryUrl = options.repositoryUrl;
     this.repoPath = options.dataPath;
     this.manifestPath = path.join(this.repoPath, 'gitdb.manifest.json');
+    this.gitignorePath = path.join(this.repoPath, '.gitignore');
     this.autoCommitIntervalMs = options.autoCommitIntervalMs;
     this.immediateCommitDelayMs = options.immediateCommitDelayMs;
     this.syncPollMs = Math.max(0, options.syncPollSeconds) * 1000;
@@ -90,6 +92,13 @@ export class GitRepository {
         'utf8',
       );
       this.logger.info('[gitdb] manifest written');
+    }
+
+    if (!existsSync(this.gitignorePath)) {
+      // FileManager writes entity files atomically (temp file + rename); if a process is
+      // killed between those two steps it leaves a stray `*.tmp` sibling. Ignoring it keeps
+      // `git add -A` from ever committing a half-written file.
+      await writeFile(this.gitignorePath, '*.tmp\n', 'utf8');
     }
 
     this.intervalTimer = setInterval(() => {
