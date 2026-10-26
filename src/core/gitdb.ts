@@ -137,7 +137,10 @@ export class GitDB {
   }
 
   select(fields?: SelectFieldsInput): SelectQuery {
-    return new SelectQuery((entityName) => this.fileManager.readEntityRows(entityName), {
+    return new SelectQuery(async (entityName) => {
+      await this.readyPromise;
+      return this.fileManager.readEntityRows(entityName);
+    }, {
       relationsRegistry: this.selectWithContext?.relationsRegistry,
       includeRelations: this.selectWithContext?.includeRelations,
       selectFields: fields,
@@ -183,30 +186,43 @@ export class GitDB {
   }
 
   insert(entity: EntityDefinition): InsertQuery {
+    this.fileManager.configureEntity(entity.name, entity.options);
     return new InsertQuery(entity, {
-      loadEntityRows: (entityName) => this.fileManager.readEntityRows(entityName),
+      loadEntityRows: async (entityName) => {
+        await this.readyPromise;
+        return this.fileManager.readEntityRows(entityName);
+      },
       saveEntityRows: (entityName, rows) => this.fileManager.writeEntityRows(entityName, rows),
       queueCommit: (reason) => this.repository.queueBackgroundCommit(reason, this.actor),
     });
   }
 
   update(entity: EntityDefinition): UpdateQuery {
+    this.fileManager.configureEntity(entity.name, entity.options);
     return new UpdateQuery(entity, {
-      loadEntityRows: (entityName) => this.fileManager.readEntityRows(entityName),
+      loadEntityRows: async (entityName) => {
+        await this.readyPromise;
+        return this.fileManager.readEntityRows(entityName);
+      },
       saveEntityRows: (entityName, rows) => this.fileManager.writeEntityRows(entityName, rows),
       queueCommit: (reason) => this.repository.queueBackgroundCommit(reason, this.actor),
     });
   }
 
   delete(entity: EntityDefinition): DeleteQuery {
+    this.fileManager.configureEntity(entity.name, entity.options);
     return new DeleteQuery(entity, {
-      loadEntityRows: (entityName) => this.fileManager.readEntityRows(entityName),
+      loadEntityRows: async (entityName) => {
+        await this.readyPromise;
+        return this.fileManager.readEntityRows(entityName);
+      },
       saveEntityRows: (entityName, rows) => this.fileManager.writeEntityRows(entityName, rows),
       queueCommit: (reason) => this.repository.queueBackgroundCommit(reason, this.actor),
     });
   }
 
   private async loadRowsForAggregate(entity: EntityDefinition, where?: AggregateWhereInput): Promise<EntityRow[]> {
+    await this.readyPromise;
     const rows = await this.fileManager.readEntityRows<EntityRow>(entity.name);
     if (!where) {
       return rows;
@@ -265,9 +281,16 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
   });
 
   const fileManager = new FileManager(dataPath);
+  for (const entity of options.entities ?? []) {
+    fileManager.configureEntity(entity.name, entity.options);
+  }
 
   // initialize() must never become an unhandled rejection; real callers observe failures via GitDB.ready()
-  const readyPromise = repository.initialize();
+  const readyPromise = repository.initialize(async () => {
+    if (await fileManager.migrateLargeFiles()) {
+      repository.queueBackgroundCommit('migrate:chunks');
+    }
+  });
   readyPromise.catch(() => {});
 
   return new GitDB(repository, fileManager, undefined, readyPromise);

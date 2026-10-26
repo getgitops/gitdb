@@ -30,7 +30,7 @@
     "clean": "rm -rf dist",
     "build": "tsup src/index.ts --dts --format esm,cjs --clean",
     "dev": "tsup src/index.ts --dts --format esm,cjs --watch",
-    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "demo": "npm run build && node --experimental-strip-types test-git-db.ts",

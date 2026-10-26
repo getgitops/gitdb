@@ -1,5 +1,6 @@
 export type GitDbOptions = {
   repositoryUrl: string;
+  entities?: import('./core/schema.ts').EntityDefinition[];
   autoCommitIntervalMs?: number;
   immediateCommitDelayMs?: number;
   /** Interval in seconds to push pending commits when `syncMode` is `'poll'`. Set to 0 to disable. */

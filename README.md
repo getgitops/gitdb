@@ -60,6 +60,43 @@ const db = gitDb('https://github.com/org/repo.git', {
 await db.ready();
 ```
 
+#### Fragmentacion automatica
+
+Por defecto, las tablas cuyo JSON serializado supera **20 MiB (20 * 1024 * 1024 bytes)**
+se guardan en fragmentos de hasta 20 MiB. Las tablas menores o iguales al umbral
+siguen siendo un unico array JSON. Tambien se fragmentan filas individuales que
+superen el limite, sin perder caracteres Unicode.
+
+`<tabla>.json` pasa a ser un indice de los archivos `.part` de un directorio
+`<tabla>.chunks-<id>/`. GitDB reconstruye la tabla y la mantiene en memoria para
+las siguientes lecturas; CRUD, relaciones, agregaciones y auditoria conservan su API.
+Los fragmentos no se deben editar individualmente.
+
+Al inicializar, `await db.ready()` espera la migracion automatica de las tablas
+grandes existentes. Los cambios se registran con el motivo `migrate:chunks` y se
+sincronizan con la politica habitual del repositorio. Al reducir una tabla por
+debajo del umbral, vuelve a un unico JSON y se eliminan los fragmentos sobrantes.
+
+Para desactivar la fragmentacion por tabla:
+
+```ts
+const Settings = entity('settings', { value: text() }, { chunk: false });
+const db = gitDb('https://github.com/org/repo.git', {
+  entities: [Settings],
+});
+await db.ready();
+```
+
+Pasa las entidades con excepciones en `entities` para que se respeten tambien
+durante la migracion inicial. No es necesario registrar entidades para activar
+el comportamiento por defecto. Desactivar chunks permite archivos grandes que
+el proveedor Git podria rechazar.
+
+La migracion no reescribe el historial Git. Si ya hay blobs de mas de 100 MB en
+commits pendientes de subir, borrarlos de la ultima version no basta: hay que
+retirarlos de esos commits mediante una limpieza explicita del historial antes
+de hacer push. Las versiones anteriores de GitDB no pueden leer el nuevo formato.
+
 #### Autenticación con Personal Access Token
 
 Si el repositorio remoto es privado, pasa un token de acceso personal de GitHub vía `authToken` (recomendado tomarlo de una variable de entorno) o simplemente define `GITDB_GITHUB_TOKEN`/`GITHUB_TOKEN` en el entorno y `gitDb` lo detecta automáticamente:

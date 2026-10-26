@@ -1,9 +1,9 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import type { GitRepository } from '../src/infrastructure/git-repository.ts';
-import { FileManager } from '../src/infrastructure/file-manager.ts';
+import { DEFAULT_CHUNK_SIZE_BYTES, FileManager } from '../src/infrastructure/file-manager.ts';
 import { GitDB } from '../src/core/gitdb.ts';
 import { entity, integer, text, uuid } from '../src/core/schema.ts';
 
@@ -42,6 +42,28 @@ async function createDb() {
 }
 
 describe('GitDB insert e2e', () => {
+  it('usa chunks por defecto en CRUD y permite desactivarlos desde el schema', async () => {
+    const { db, basePath } = await createDb();
+    const items = entity('items', { id: integer().primaryKey(), value: text() });
+    const plain = entity('plain', { id: integer().primaryKey(), value: text() }, { chunk: false });
+    const value = 'a'.repeat(DEFAULT_CHUNK_SIZE_BYTES);
+    try {
+      await db.insert(items).values({ id: 1, value });
+      expect(JSON.parse(await readFile(path.join(basePath, 'items.json'), 'utf8')).kind).toBe('gitdb-chunks');
+      expect((await db.select().from(items)).rows).toEqual([{ id: 1, value }]);
+      expect(await db.$count(items)).toBe(1);
+      await db.update(items).set({ value: 'small' }).where({ id: 1 });
+      expect((await db.select().from(items)).rows).toEqual([{ id: 1, value: 'small' }]);
+      await db.update(items).set({ value }).where({ id: 1 });
+      await db.delete(items).where({ id: 1 });
+      expect((await db.select().from(items)).rows).toEqual([]);
+      await db.insert(plain).values({ id: 1, value });
+      expect(Array.isArray(JSON.parse(await readFile(path.join(basePath, 'plain.json'), 'utf8')))).toBe(true);
+    } finally {
+      await rm(basePath, { recursive: true, force: true });
+    }
+  });
+
   it('inserta multiples filas y luego select/from/where devuelve datos persistidos', async () => {
     const { db, reasons, basePath } = await createDb();
     const users = entity('users', {

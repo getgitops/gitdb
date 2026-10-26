@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitDbOptions } from '../types.ts';
 import { GitDbLogger } from './logger.ts';
+import { decodeEntityRows } from './file-manager.ts';
 import {
   filterAuditEvents,
   formatAuditLogArgs,
@@ -13,7 +14,7 @@ import {
   type AuditQueryResult,
 } from '../core/audit.ts';
 
-export type ResolvedGitDbOptions = Required<Omit<GitDbOptions, 'logger'>> & {
+export type ResolvedGitDbOptions = Required<Omit<GitDbOptions, 'logger' | 'entities'>> & {
   logger: GitDbLogger;
   dataPath: string;
 };
@@ -55,7 +56,7 @@ export class GitRepository {
     this.logger = options.logger;
   }
 
-  async initialize(): Promise<void> {
+  async initialize(beforeTimers?: () => Promise<void>): Promise<void> {
     this.logger.info('[gitdb] initializing repository');
 
     if (!existsSync(this.repoPath)) {
@@ -92,6 +93,8 @@ export class GitRepository {
       );
       this.logger.info('[gitdb] manifest written');
     }
+
+    await beforeTimers?.();
 
     this.intervalTimer = setInterval(() => {
       void this.commitNow('auto-interval').catch(() => {
@@ -233,8 +236,7 @@ export class GitRepository {
   async getEntityFileAt(revision: string, entity: string): Promise<unknown[] | null> {
     try {
       const content = await this.captureGit(['show', `${revision}:${entity}.json`]);
-      const parsed = JSON.parse(content);
-      return Array.isArray(parsed) ? parsed : null;
+      return await decodeEntityRows(content, (chunk) => this.captureGitBytes(['show', `${revision}:${chunk}`]));
     } catch {
       return null;
     }
@@ -314,14 +316,18 @@ export class GitRepository {
     return branch && branch !== 'HEAD' ? branch : 'main';
   }
 
-  private captureGit(args: string[], allowFailure = false): Promise<string> {
+  private async captureGit(args: string[], allowFailure = false): Promise<string> {
+    return (await this.captureGitBytes(args, allowFailure)).toString('utf8');
+  }
+
+  private captureGitBytes(args: string[], allowFailure = false): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const child = spawn('git', args, { cwd: this.repoPath, stdio: 'pipe' });
 
-      let stdout = '';
+      const stdout: Buffer[] = [];
       let stderr = '';
       child.stdout.on('data', (chunk) => {
-        stdout += String(chunk);
+        stdout.push(Buffer.from(chunk));
       });
       child.stderr.on('data', (chunk) => {
         stderr += String(chunk);
@@ -335,7 +341,7 @@ export class GitRepository {
           return;
         }
 
-        resolve(stdout);
+        resolve(Buffer.concat(stdout));
       });
     });
   }

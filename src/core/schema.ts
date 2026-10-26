@@ -37,10 +37,15 @@ export type ColumnDefinition = {
 
 export type EntitySchema = Record<string, ColumnDefinition>;
 
+export type EntityOptions = {
+  chunk?: boolean;
+};
+
 export type EntityDefinition<TSchema extends EntitySchema = EntitySchema> = {
   kind: 'entity';
   name: string;
   schema: TSchema;
+  options?: EntityOptions;
 };
 
 export type ColumnInput = ColumnBuilder | ColumnDefinition | string;
@@ -240,6 +245,7 @@ export function timestamp(): ColumnBuilder {
 export function entity<TSchema extends EntitySchemaInput>(
   name: string,
   schema: TSchema,
+  options?: EntityOptions,
 ): EntityDefinition<EntitySchema> {
   const normalizedEntries = Object.entries(schema).map(([fieldName, fieldDefinition]) => {
     return [fieldName, normalizeColumn(fieldDefinition)] as const;
@@ -249,6 +255,7 @@ export function entity<TSchema extends EntitySchemaInput>(
     kind: 'entity',
     name,
     schema: Object.fromEntries(normalizedEntries),
+    ...(options ? { options } : {}),
   };
 }
 
