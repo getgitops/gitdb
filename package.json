@@ -21,7 +21,7 @@
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/getgitops/gitdb.git"
+    "url": "git+https://github.com/getgitops/gitdb.git"
   },
   "publishConfig": {
     "access": "public"
