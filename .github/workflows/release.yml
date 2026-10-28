@@ -63,7 +63,7 @@ jobs:
         run: npm ci
 
       - name: Build and verify
-        run: npm run clean && npm run build && npm run typecheck && npm run test
+        run: npm run clean && npm run build && npm run check && npm run test
 
       - name: Publish to NPM
         run: npm publish --access public
