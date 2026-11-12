@@ -60,6 +60,23 @@ const db = gitDb('https://github.com/org/repo.git', {
 await db.ready();
 ```
 
+#### Rama de trabajo
+
+Por defecto, GitDB commitea y hace push a la rama por defecto del remoto (la que
+queda activa tras el clone). Para usar otra rama, pasa `branch` o define la
+variable de entorno `GITDB_BRANCH`:
+
+```ts
+const db = gitDb('https://github.com/org/repo.git', {
+  branch: 'develop',
+});
+```
+
+Durante la inicialización, GitDB hace checkout de esa rama en el clon local
+(también en clones existentes que quedaron en otra rama). Si la rama no existe
+en el remoto ni en local, se crea a partir del HEAD actual y se publica con el
+primer push.
+
 #### Fragmentacion automatica
 
 Por defecto, las tablas cuyo JSON serializado supera **20 MiB (20 * 1024 * 1024 bytes)**

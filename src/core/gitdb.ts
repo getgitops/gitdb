@@ -260,6 +260,11 @@ function resolveSyncMode(explicit?: 'poll' | 'immediate'): 'poll' | 'immediate' 
   return process.env.GITDB_SYNC_MODE?.trim().toLowerCase() === 'immediate' ? 'immediate' : 'poll';
 }
 
+/** Empty string means "use the remote's default branch" (whatever the clone lands on). */
+function resolveBranch(explicit?: string): string {
+  return explicit?.trim() || process.env.GITDB_BRANCH?.trim() || '';
+}
+
 export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions, 'repositoryUrl'>> = {}): GitDB {
   const logger = new GitDbLogger(options.logger);
   const dataPath = options.dataPath ?? DEFAULT_DATA_PATH;
@@ -267,6 +272,7 @@ export function gitDb(repositoryUrl: string, options: Partial<Omit<GitDbOptions,
   const repository = new GitRepository({
     dataPath,
     repositoryUrl,
+    branch: resolveBranch(options.branch),
     autoCommitIntervalMs: options.autoCommitIntervalMs ?? 60_000,
     immediateCommitDelayMs: options.immediateCommitDelayMs ?? 800,
     syncPollSeconds: options.syncPollSeconds ?? 60,

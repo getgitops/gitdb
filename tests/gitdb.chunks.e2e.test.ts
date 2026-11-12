@@ -78,7 +78,7 @@ describe('GitDB chunks with real Git repositories', () => {
 
   it('reconstructs historical Unicode chunks and diffs across storage formats', async () => {
     repository = new GitRepository({
-      dataPath, repositoryUrl: remote, authToken: '', authUsername: 'x-access-token',
+      dataPath, repositoryUrl: remote, branch: '', authToken: '', authUsername: 'x-access-token',
       autoCommitIntervalMs: 60_000, immediateCommitDelayMs: 60_000,
       syncMode: 'poll', syncPollSeconds: 0, gitUserName: 'test', gitUserEmail: 'test@example.com',
       logger: new GitDbLogger(),

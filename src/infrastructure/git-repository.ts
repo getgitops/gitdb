@@ -22,6 +22,7 @@ export type ResolvedGitDbOptions = Required<Omit<GitDbOptions, 'logger' | 'entit
 export class GitRepository {
   private readonly repoPath: string;
   private readonly repositoryUrl: string;
+  private readonly branch: string;
   private readonly autoCommitIntervalMs: number;
   private readonly immediateCommitDelayMs: number;
   private readonly syncPollMs: number;
@@ -43,6 +44,7 @@ export class GitRepository {
 
   constructor(options: ResolvedGitDbOptions) {
     this.repositoryUrl = options.repositoryUrl;
+    this.branch = options.branch;
     this.repoPath = options.dataPath;
     this.manifestPath = path.join(this.repoPath, 'gitdb.manifest.json');
     this.autoCommitIntervalMs = options.autoCommitIntervalMs;
@@ -71,6 +73,8 @@ export class GitRepository {
       // keep origin in sync in case the token rotated since the last run
       await this.runGit(['remote', 'set-url', 'origin', this.getAuthenticatedUrl()]);
     }
+
+    await this.ensureBranch();
 
     await this.runGit(['config', 'user.name', this.gitUserName]);
     await this.runGit(['config', 'user.email', this.gitUserEmail]);
@@ -311,9 +315,42 @@ export class GitRepository {
     }
   }
 
+  /**
+   * Checks out the configured branch so commits and pushes target it instead of the clone's
+   * default branch. Also fixes existing clones left on the wrong branch by a previous run.
+   */
+  private async ensureBranch(): Promise<void> {
+    if (!this.branch) {
+      return;
+    }
+
+    const current = (await this.captureGit(['rev-parse', '--abbrev-ref', 'HEAD'], true)).trim();
+    if (current === this.branch) {
+      return;
+    }
+
+    this.logger.info('[gitdb] switching branch', { repoPath: this.repoPath, from: current, to: this.branch });
+    await this.runGit(['fetch', 'origin'], true);
+
+    const hasLocal = (await this.runGit(['rev-parse', '--verify', '--quiet', `refs/heads/${this.branch}`], true)) === 0;
+    if (hasLocal) {
+      await this.runGit(['checkout', this.branch]);
+      return;
+    }
+
+    const hasRemote =
+      (await this.runGit(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${this.branch}`], true)) === 0;
+    if (hasRemote) {
+      await this.runGit(['checkout', '--track', `origin/${this.branch}`]);
+    } else {
+      // branch does not exist locally or remotely yet: create it from the current HEAD
+      await this.runGit(['checkout', '-b', this.branch]);
+    }
+  }
+
   private async getCurrentBranch(): Promise<string> {
     const branch = (await this.captureGit(['rev-parse', '--abbrev-ref', 'HEAD'], true)).trim();
-    return branch && branch !== 'HEAD' ? branch : 'main';
+    return branch && branch !== 'HEAD' ? branch : this.branch || 'main';
   }
 
   private async captureGit(args: string[], allowFailure = false): Promise<string> {

@@ -1,5 +1,11 @@
 export type GitDbOptions = {
   repositoryUrl: string;
+  /**
+   * Branch to commit and push to. The local clone is checked out to this branch during
+   * initialization (created from the current HEAD if it does not exist yet, locally or remotely).
+   * Defaults to `GITDB_BRANCH` from the environment, or the remote's default branch when unset.
+   */
+  branch?: string;
   entities?: import('./core/schema.ts').EntityDefinition[];
   autoCommitIntervalMs?: number;
   immediateCommitDelayMs?: number;
